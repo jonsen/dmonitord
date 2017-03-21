@@ -184,7 +184,7 @@ func main() {
 			minute := now.Minute()
 			second := now.Second()
 
-			if hour > -1 && second == 0 && minute%5 == 0 {
+			if hour == 3 && minute == 0 && second == 0 {
 				scan(dFile)
 			}
 		}
