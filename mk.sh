@@ -14,6 +14,9 @@ if [ "$name" = "run" ]; then
 else
     echo "Build for bin/$APP"
     gofmt -w ./src/*.go 
+    if [ ! -d "./bin" ]; then
+        mkdir bin
+    fi
     if [ "$os" = "linux" ]; then
         export CGO_ENABLED=0 GOOS=linux GOARCH=amd64
         go build -o bin/${APP}.lin ./src/*.go
