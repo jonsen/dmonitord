@@ -14,14 +14,7 @@ import (
 	"time"
 )
 
-type queue struct {
-	expiry time.Time
-	last   time.Time
-	days   int64
-}
-
 var (
-	cache    = make(map[string]queue)
 	smtp     *Smtp
 	mailAddr string
 	retry    int
@@ -34,7 +27,7 @@ var (
 // more than 30 days, check every 3 days.
 // less than 30 days, check every day.
 func scan(fileName string) {
-	Log.Debug("start scan domain")
+	Log.Debug("start scan domains")
 	// get domain from file
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -67,16 +60,19 @@ func scan(fileName string) {
 			continue
 		}
 
+		domain = strings.ToLower(domain)
+
 		extDomain, ok := cache[domain]
 		if ok {
+			Log.Tracef("get domain %s from cache", domain)
 			switch {
-			case extDomain.days > 120 && !extDomain.last.Before(now.Add(-24*time.Hour*30)):
+			case extDomain.Days > 120 && !extDomain.Last.Before(now.Add(-24*time.Hour*30)):
 				fallthrough
-			case extDomain.days >= 60 && !extDomain.last.Before(now.Add(-24*time.Hour*7)):
+			case extDomain.Days >= 60 && !extDomain.Last.Before(now.Add(-24*time.Hour*7)):
 				fallthrough
-			case extDomain.days >= 30 && !extDomain.last.Before(now.Add(-24*time.Hour*3)):
+			case extDomain.Days >= 30 && !extDomain.Last.Before(now.Add(-24*time.Hour*3)):
 				Log.Debugf("domain %s not need scan. expiry day %d, last scan %s.",
-					domain, extDomain.days, extDomain.last)
+					domain, extDomain.Days, extDomain.Last)
 				continue
 			default:
 			}
@@ -93,7 +89,7 @@ func scan(fileName string) {
 		}
 
 		if err != nil {
-			Log.Errorf("domain %s error %s", domain, err)
+			Log.Errorf("whois domain %s error %s", domain, err)
 			continue
 		}
 
@@ -102,17 +98,39 @@ func scan(fileName string) {
 
 		// Check expiry time
 		exDay := (d.Expiry.Unix() - nowUnix) / 86400
+
+		// insert or update
 		if ok {
-			extDomain.last = now
-			extDomain.days = exDay
+			extDomain.Last = now
+			extDomain.Days = exDay
+
+			err := extDomain.Update()
+			if err != nil {
+				Log.Errorf("update domain %s error %s", domain, err)
+			}
 		} else {
-			cache[domain] = queue{expiry: d.Expiry, last: now, days: exDay}
+			dc := &domainCache{
+				Name:   domain,
+				Create: d.Create,
+				Expiry: d.Expiry,
+				Last:   now,
+				Days:   exDay,
+			}
+
+			cache[domain] = dc
+
+			err := dc.Insert()
+			if err != nil {
+				Log.Errorf("insert domain %s error %s", domain, err)
+			}
 		}
 
 		mailList[domain] = exDay
 
 		time.Sleep(time.Second * 3)
 	}
+
+	Log.Debugf("end scan domains. with %d domains, using %s.", count, time.Now().Sub(now))
 
 	// Send email
 	total := len(mailList)
@@ -124,7 +142,7 @@ func scan(fileName string) {
 
 		list := NewMapSorter(mailList)
 		for sn, data := range list {
-			date := cache[data.Key].expiry.Format("2006-01-02")
+			date := cache[data.Key].Expiry.Format("2006-01-02")
 			content += fmt.Sprintf("   %d. %s will expire on %d (%s) days.\n",
 				sn+1, data.Key, data.Val, date)
 		}
@@ -139,21 +157,21 @@ func scan(fileName string) {
 		}
 	}
 
-	Log.Debugf("end scan domain. with %d domain, using %s.", count, time.Now().Sub(now))
+	Log.Debugf("sended mail to %s, using %s.", mailAddr, time.Now().Sub(now))
 
 }
 
 func main() {
 	EbaseInit()
 
-	/*
-		model, err := NewDefaultModels()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		defer model.Close()
-	*/
+	model, err := NewDefaultModels()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer model.Close()
+
+	model.Orm.Sync2(new(domainCache))
 
 	dFile, err := Config.String("common.dfile", "")
 	if err != nil {
@@ -167,7 +185,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// initial smtp for send mail
 	smtp = NewSmtp()
+
 	mailAddr, _ = Config.String("common.adminer", "")
 	retry, _ = Config.Int("common.retry", 3)
 	cHour, _ := Config.Int("check.hour", 5)
@@ -175,6 +195,9 @@ func main() {
 	cSecond, _ := Config.Int("check.second", 0)
 
 	Log.Info("dmonitord running now...")
+
+	// load cache from database
+	loadCache()
 
 	go func() {
 
