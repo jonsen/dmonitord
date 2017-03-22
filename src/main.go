@@ -125,7 +125,7 @@ func scan(fileName string) {
 		list := NewMapSorter(mailList)
 		for sn, data := range list {
 			date := cache[data.Key].expiry.Format("2006-01-02")
-			content += fmt.Sprintf("   %d. %s will expired on %d (%s) days.\n",
+			content += fmt.Sprintf("   %d. %s will expire on %d (%s) days.\n",
 				sn+1, data.Key, data.Val, date)
 		}
 
