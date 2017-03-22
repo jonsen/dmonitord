@@ -170,6 +170,9 @@ func main() {
 	smtp = NewSmtp()
 	mailAddr, _ = Config.String("common.adminer", "")
 	retry, _ = Config.Int("common.retry", 3)
+	cHour, _ := Config.Int("check.hour", 5)
+	cMinute, _ := Config.Int("check.minute", 0)
+	cSecond, _ := Config.Int("check.second", 0)
 
 	Log.Info("dmonitord running now...")
 
@@ -184,7 +187,7 @@ func main() {
 			minute := now.Minute()
 			second := now.Second()
 
-			if hour == 3 && minute == 0 && second == 0 {
+			if hour == cHour && minute == cMinute && second == cSecond {
 				scan(dFile)
 			}
 		}
