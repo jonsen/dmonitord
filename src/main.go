@@ -94,6 +94,14 @@ func scan(fileName string) {
 		}
 
 		d := parse(ss)
+		if d.Domain == "" {
+			Log.Debugf("not found domain for %s", domain)
+			if ok {
+				delete(cache, domain)
+			}
+			continue
+		}
+
 		count++
 
 		// Check expiry time
@@ -103,6 +111,8 @@ func scan(fileName string) {
 		if ok {
 			extDomain.Last = now
 			extDomain.Days = exDay
+			extDomain.Create = d.Create
+			extDomain.Expiry = d.Expiry
 
 			err := extDomain.Update()
 			if err != nil {
