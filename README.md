@@ -1,10 +1,12 @@
-# dmonitord
+    # dmonitord
 
 dmonitord is a daemon for monitor domains expire date.
 
 
 # How to run
 
+    go get github.com/domainr/whois
+    go get github.com/forease/ebase
     git clone https://github.com/jonsen/dmonitord
     cd dmonitord
     ./mk.sh
